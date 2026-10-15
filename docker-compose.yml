@@ -1,0 +1,14 @@
+# CIForge with the example project. Webhooks need CIFORGE_WEBHOOK_SECRET.
+services:
+  ciforge:
+    build: .
+    ports: ["127.0.0.1:8111:8111"]
+    environment:
+      CIFORGE_PROJECTS: hello=/pipelines/hello.yml
+      CIFORGE_WEBHOOK_SECRET: ${CIFORGE_WEBHOOK_SECRET:-}
+    volumes:
+      - ./examples/hello/.ciforge.yml:/pipelines/hello.yml:ro
+      - ciforge-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+volumes:
+  ciforge-data:
