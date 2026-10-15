@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ run.id }} · CIForge{% endblock %}
+{% block head %}{% if run.status in ("queued", "running") %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block body %}
+<h1>{{ run.project }} <span class="status {{ run.status }}">{{ run.status }}</span></h1>
+<p class="muted">Run <code>{{ run.id }}</code> · {{ run.trigger }} · branch {{ run.branch or "-" }} ·
+  commit <code>{{ (run.commit_sha or "")[:12] }}</code> · {{ duration(run.started_at, run.finished_at) }}</p>
+<div class="chain">
+  {% for b in run.builds %}
+  <article class="card build">
+    <h2><span class="status {{ b.status }}">{{ b.status }}</span> {{ b.name }}</h2>
+    <p class="muted"><code>{{ b.build_id }}</code>{% if b.depends_on %} · after {{ b.depends_on | join(", ") }}{% endif %}
+      · {{ duration(b.started_at, b.finished_at) }}</p>
+    {% if b.reason %}<p class="reason">{{ b.reason }}</p>{% endif %}
+    <ol class="steps">
+      {% for s in b.steps %}
+      <li><span class="status {{ s.status }}">{{ s.status }}</span> {{ s.name }}
+        {% if s.exit_code is not none %}<span class="muted">exit {{ s.exit_code }}</span>{% endif %}
+        <a href="/api/runs/{{ run.id }}/builds/{{ b.build_id }}/steps/{{ s.idx }}/log">log</a></li>
+      {% endfor %}
+    </ol>
+    {% if b.artifacts %}<details><summary>{{ b.artifacts | length }} artifact(s)</summary><ul class="artifacts">
+      {% for a in b.artifacts %}<li><a href="/api/runs/{{ run.id }}/builds/{{ b.build_id }}/artifacts/{{ a.path }}">{{ a.path }}</a>
+        <span class="muted">{{ a.size }} B</span></li>{% endfor %}
+    </ul></details>{% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CIForge{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="bar"><a href="/" class="brand">CIForge</a><span class="muted">build chains, artifacts, triggers</span></header>
+  <main>{% block body %}{% endblock %}</main>
+</body>
+</html>

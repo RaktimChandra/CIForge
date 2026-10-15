@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block head %}<meta http-equiv="refresh" content="10">{% endblock %}
+{% block body %}
+<section>
+  <h1>Projects</h1>
+  {% for p in projects %}
+  <article class="card">
+    <h2>{{ p.name }}</h2>
+    {% if p.error %}<p class="status failure">{{ p.error }}</p>{% else %}
+    <p class="muted">{{ p.description }}</p>
+    <p>Chain: {% for b in p.chain %}<code>{{ b }}</code>{% if not loop.last %} → {% endif %}{% endfor %}</p>
+    <p class="muted">Trigger with <code>POST /api/projects/{{ p.name }}/runs</code></p>
+    {% endif %}
+  </article>
+  {% else %}<p class="muted">No projects configured (set CIFORGE_PROJECTS).</p>{% endfor %}
+</section>
+<section>
+  <h1>Recent runs</h1>
+  <table>
+    <thead><tr><th>Run</th><th>Project</th><th>Status</th><th>Branch</th><th>Commit</th><th>Trigger</th><th>Created</th></tr></thead>
+    <tbody>
+    {% for r in runs %}
+      <tr>
+        <td><a href="/runs/{{ r.id }}">{{ r.id }}</a></td><td>{{ r.project }}</td>
+        <td><span class="status {{ r.status }}">{{ r.status }}</span></td>
+        <td>{{ r.branch or "" }}</td><td><code>{{ (r.commit_sha or "")[:8] }}</code></td>
+        <td>{{ r.trigger }}</td><td>{{ r.created_at }}</td>
+      </tr>
+    {% else %}<tr><td colspan="7" class="muted">No runs yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
