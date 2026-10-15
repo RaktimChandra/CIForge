@@ -1,0 +1,41 @@
+# A minimal chain: compile -> (test, lint) -> package, with artifacts handed down the chain.
+version: 1
+project: hello
+description: Example pipeline showing snapshot and artifact dependencies.
+params:
+  greeting: hello
+max_parallel: 2
+triggers:
+  - type: vcs
+    branches: [main, "release/*"]
+builds:
+  compile:
+    name: Compile
+    steps:
+      - name: build
+        run: |
+          mkdir -p out
+          echo "%greeting% from commit %vcs.commit%" > out/app.txt
+    artifacts: ["out/** => bin"]
+  test:
+    name: Test
+    depends_on: [compile]
+    artifacts_from: [{build: compile, paths: ["bin/**"], into: "."}]
+    steps:
+      - name: check the artifact
+        run: grep -q "%greeting%" bin/app.txt && echo "tests passed" | tee report.txt
+    artifacts: ["report.txt => reports"]
+  lint:
+    name: Lint
+    depends_on: [compile]
+    steps:
+      - name: lint
+        run: echo "lint ok"
+  package:
+    name: Package
+    depends_on: [test, lint]
+    artifacts_from: [{build: compile, paths: ["bin/**"]}, {build: test, paths: ["reports/**"]}]
+    steps:
+      - name: bundle
+        run: tar czf release.tgz bin reports && ls -l release.tgz
+    artifacts: ["release.tgz"]
