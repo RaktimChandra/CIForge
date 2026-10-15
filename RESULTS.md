@@ -11,7 +11,7 @@ CI uses `alpine:3.20`).
 
 | | |
 |---|---|
-| Tests | 33 passed, 0 failed, 0 skipped (Docker runner included) |
+| Tests | 34 passed, 0 failed, 0 skipped (Docker runner included), on Python 3.13.16 and 3.12 |
 | Line coverage | 92 % (983 statements, 80 missed) |
 | `ruff check`, `ruff format --check` | clean |
 | `mypy --strict` | no issues in 15 source files |
@@ -21,3 +21,4 @@ CI uses `alpine:3.20`).
 | Found by | Defect | Fix |
 |---|---|---|
 | `test_docker_runner_executes_inside_the_image_with_the_workspace_mounted` | `%param%` references in a Docker runner's image were not substituted (`docker: invalid reference format`) | the engine substitutes the image and options per build |
+| CI on Python 3.12 (5 failures; 3.13 green) | `out/** => bin` published nothing on 3.12: its `Path.glob` matches only directories for a trailing `**` | trailing `**` normalised to `**/*`; regression test |

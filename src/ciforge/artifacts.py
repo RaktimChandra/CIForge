@@ -30,15 +30,22 @@ def _fixed_prefix(glob: str) -> str:
     return "/".join(parts)
 
 
+def _files(root: Path, pattern: str) -> list[Path]:
+    """Files under ``root`` matching ``pattern``. A trailing ``**`` means "everything below":
+    Python 3.12's ``Path.glob`` matches only directories for it, 3.13 also files, so it is
+    normalised to ``**/*`` to behave the same everywhere."""
+    if pattern == "**" or pattern.endswith("/**"):
+        pattern += "/*"
+    return sorted(f for f in root.glob(pattern) if f.is_file())
+
+
 def publish(workspace: Path, rules: list[str], store_dir: Path) -> list[tuple[str, int]]:
     """Copies files matching ``rules`` from ``workspace`` into ``store_dir``; returns (path, size) pairs."""
     published: dict[str, int] = {}
     for rule in rules:
         src, dst = _split(rule)
         prefix = _fixed_prefix(src)
-        for f in sorted(workspace.glob(src)):
-            if not f.is_file():
-                continue
+        for f in _files(workspace, src):
             rel = f.relative_to(workspace / prefix) if prefix else f.relative_to(workspace)
             target = PurePosixPath(dst) / PurePosixPath(*rel.parts) if dst else PurePosixPath(*rel.parts)
             out = store_dir / target
@@ -54,13 +61,12 @@ def fetch(store_dir: Path, patterns: list[str], into: Path) -> list[str]:
     if not store_dir.exists():
         return copied
     for pattern in patterns:
-        for f in sorted(store_dir.glob(pattern)):
-            if f.is_file():
-                rel = f.relative_to(store_dir)
-                out = into / rel
-                out.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(f, out)
-                copied.append(str(PurePosixPath(*rel.parts)))
+        for f in _files(store_dir, pattern):
+            rel = f.relative_to(store_dir)
+            out = into / rel
+            out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, out)
+            copied.append(str(PurePosixPath(*rel.parts)))
     return sorted(set(copied))
 
 

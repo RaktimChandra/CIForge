@@ -49,6 +49,17 @@ def test_artifact_rules_preserve_the_path_below_the_wildcard(tmp_path):
     assert (into / "reports/api/target/surefire-reports/TEST-a.xml").read_text().endswith("TEST-a.xml")
 
 
+def test_a_trailing_double_star_means_every_file_below_on_every_python(tmp_path):
+    # Python 3.12's Path.glob("out/**") yields only directories; 3.13 yields files too.
+    # CI on 3.12 caught the difference (5 failures); rules now behave the same on both.
+    ws = tmp_path / "ws"
+    (ws / "out/deep").mkdir(parents=True)
+    (ws / "out/a.txt").write_text("a")
+    (ws / "out/deep/b.txt").write_text("b")
+    assert [p for p, _ in artifacts.publish(ws, ["out/** => bin"], tmp_path / "s")] == ["bin/a.txt", "bin/deep/b.txt"]
+    assert artifacts.fetch(tmp_path / "s", ["**"], tmp_path / "f") == ["bin/a.txt", "bin/deep/b.txt"]
+
+
 def test_artifact_downloads_cannot_escape_their_directory(tmp_path):
     with pytest.raises(ValueError, match="escapes"):
         artifacts.safe_path(tmp_path / "a", "../../etc/passwd")

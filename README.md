@@ -95,7 +95,7 @@ is listed in [docs/API.md](docs/API.md).
 ruff check src tests && mypy && pytest
 ```
 
-33 tests: configuration validation (cycles, unknown references, parameters), parameter
+34 tests: configuration validation (cycles, unknown references, parameters), parameter
 substitution and masking, artifact rules, webhook signatures, branch and cron matching, and
 the engine end to end on real git repositories — chains, failure propagation, parallelism,
 timeouts that kill child processes, cancellation, pinned commits, the Docker runner — plus the
