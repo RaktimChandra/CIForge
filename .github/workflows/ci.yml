@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: lint, types, tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+      - run: mypy
+      - name: Tests (including the Docker runner)
+        run: |
+          docker pull -q alpine:3.20
+          pytest --cov=ciforge --cov-report=term-missing --junitxml=pytest.xml
+      - name: Summary
+        if: always()
+        run: python -c "import xml.etree.ElementTree as E; r=E.parse('pytest.xml').getroot(); s=r.find('testsuite') if r.tag=='testsuites' else r; print(f\"::notice title=pytest ${{ matrix.python }}::tests={s.get('tests')} failures={s.get('failures')} errors={s.get('errors')} skipped={s.get('skipped')}\")"
+
+  image:
+    name: Docker image + smoke run of the example
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t ciforge:ci .
+      - name: Serve and run the example chain through the API
+        run: |
+          mkdir /tmp/hello && cp examples/hello/.ciforge.yml /tmp/hello/
+          (cd /tmp/hello && git init -q -b main && git add -A && git -c user.email=ci@x -c user.name=ci commit -qm init)
+          sed 's#^builds:#vcs:\n  url: /repo\nbuilds:#' examples/hello/.ciforge.yml > /tmp/hello.yml
+          docker run -d --name cf -p 8111:8111 -e CIFORGE_PROJECTS=hello=/p/hello.yml \
+            -v /tmp/hello.yml:/p/hello.yml:ro -v /tmp/hello:/repo:ro ciforge:ci
+          for i in $(seq 1 30); do curl -fs localhost:8111/healthz && break; sleep 1; done
+          RUN=$(curl -fs -X POST localhost:8111/api/projects/hello/runs -H 'content-type: application/json' -d '{}' \
+            | python -c 'import json,sys; print(json.load(sys.stdin)["run_id"])')
+          for i in $(seq 1 60); do
+            S=$(curl -fs localhost:8111/api/runs/$RUN | python -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+            [ "$S" != running ] && [ "$S" != queued ] && break; sleep 1
+          done
+          curl -fs localhost:8111/api/runs/$RUN | python -m json.tool | head -40
+          echo "::notice title=image smoke::example chain status=$S"
+          [ "$S" = success ]
