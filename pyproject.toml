@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ciforge"
-version = "1.0.0"
+version = "1.1.0"
 description = "A small TeamCity-style CI orchestrator: YAML build configurations, build chains, artifact dependencies, VCS and schedule triggers, local and Docker runners."
 readme = "README.md"
 license = "MIT"

@@ -70,9 +70,15 @@ ciforge run examples/hello/.ciforge.yml --source . -b test -p greeting=hi
 As a server, with the web UI on http://127.0.0.1:8111:
 
 ```bash
+export CIFORGE_API_TOKENS="$(openssl rand -hex 24)"     # starting runs over the API needs a token
 ciforge serve --project hello=examples/hello/.ciforge.yml
-curl -X POST localhost:8111/api/projects/hello/runs -H 'content-type: application/json' -d '{"builds":["test"]}'
+curl -X POST localhost:8111/api/projects/hello/runs -H "Authorization: Bearer $CIFORGE_API_TOKENS" \
+     -H 'content-type: application/json' -d '{"builds":["test"]}'
 ```
+
+Starting and cancelling runs over the API needs a bearer token from `CIFORGE_API_TOKENS`
+(comma-separated; without any, those endpoints answer 503). Reading runs, logs and the web UI
+stay open unless `CIFORGE_READ_REQUIRES_TOKEN=true`.
 
 Or with Docker Compose: `docker compose up --build`. GitHub webhooks: point a repository
 webhook at `/api/webhooks/github/<project>` (content type JSON) and set the same secret in

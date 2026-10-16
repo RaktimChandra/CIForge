@@ -1,5 +1,11 @@
 # REST API
 
+**Authentication.** `POST .../runs` and `POST .../cancel` need `Authorization: Bearer <token>`
+with a token from `CIFORGE_API_TOKENS` (comma-separated, compared in constant time); with no
+tokens configured they answer `503`. With `CIFORGE_READ_REQUIRES_TOKEN=true` every other `/api`
+endpoint and the web UI need a token too. `/healthz` is always open; webhooks authenticate with
+their HMAC signature instead.
+
 | Method and path | Purpose |
 |---|---|
 | `GET /healthz` | liveness |
@@ -14,5 +20,6 @@
 | `GET /`, `GET /runs/{id}` | web UI |
 
 Errors: `404` unknown project/run/artifact, `422` invalid pipeline or unknown build,
-`401` bad webhook signature, `503` webhooks without a configured secret, `400` artifact path
+`401` bad webhook signature or missing/invalid bearer token, `503` webhooks without a configured
+secret or run triggers without configured tokens, `400` artifact path
 outside its directory. FastAPI also serves the OpenAPI document at `/docs`.

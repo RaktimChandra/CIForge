@@ -5,10 +5,14 @@ Configuration (environment):
   CIFORGE_PROJECTS        name=path/to/pipeline.yml[,name2=...]
   CIFORGE_WEBHOOK_SECRET  shared secret for GitHub webhooks (webhooks are refused without it)
   CIFORGE_MAX_RUNS        runs executed at the same time (default 1); builds inside a run use max_parallel
+  CIFORGE_API_TOKENS      comma-separated bearer tokens; starting or cancelling runs over the API needs one
+                          (without any, those endpoints are disabled, like webhooks without a secret)
+  CIFORGE_READ_REQUIRES_TOKEN  "true": reading runs, logs and artifacts needs a token too, and the web UI is off
 """
 
 from __future__ import annotations
 
+import hmac
 import os
 import threading
 import time
@@ -19,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -46,6 +50,8 @@ class Settings:
     webhook_secret: str | None
     max_runs: int = 1
     schedule_interval: float = 20.0
+    api_tokens: tuple[str, ...] = ()
+    read_requires_token: bool = False
 
     @staticmethod
     def from_env() -> Settings:
@@ -58,7 +64,18 @@ class Settings:
             projects,
             os.environ.get("CIFORGE_WEBHOOK_SECRET") or None,
             int(os.environ.get("CIFORGE_MAX_RUNS", "1")),
+            api_tokens=tuple(t.strip() for t in (os.environ.get("CIFORGE_API_TOKENS") or "").split(",") if t.strip()),
+            read_requires_token=(os.environ.get("CIFORGE_READ_REQUIRES_TOKEN", "").lower() == "true"),
         )
+
+
+def token_ok(tokens: tuple[str, ...], header: str | None) -> bool:
+    """Constant-time check of an "Authorization: Bearer <token>" header against the configured tokens."""
+    if not tokens or not header or not header.startswith("Bearer "):
+        return False
+    given = header[len("Bearer ") :].strip().encode()
+    # compare against every token, so the time taken does not depend on which one matched
+    return any([hmac.compare_digest(given, t.encode()) for t in tokens])
 
 
 @dataclass
@@ -128,7 +145,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         server.stop.set()
         server.pool.shutdown(wait=False, cancel_futures=True)
 
-    app = FastAPI(title="CIForge", version="1.0.0", lifespan=lifespan)
+    def require_token(request: Request) -> None:
+        tokens = server.settings.api_tokens
+        if not tokens:
+            raise HTTPException(503, "the API cannot start or cancel runs: set CIFORGE_API_TOKENS")
+        if not token_ok(tokens, request.headers.get("Authorization")):
+            raise HTTPException(401, "missing or invalid bearer token", headers={"WWW-Authenticate": "Bearer"})
+
+    def require_read(request: Request) -> None:
+        if server.settings.read_requires_token:
+            require_token(request)
+
+    app = FastAPI(title="CIForge", version="1.1.0", lifespan=lifespan)
     app.state.server = server
     templates = Jinja2Templates(directory=str(WEB / "templates"))
     app.mount("/static", StaticFiles(directory=str(WEB / "static")), name="static")
@@ -143,7 +171,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/api/projects")
+    @app.get("/api/projects", dependencies=[Depends(require_read)])
     def projects() -> list[dict[str, Any]]:
         out = []
         for name in server.settings.projects:
@@ -162,24 +190,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 out.append({"name": name, "error": e.detail})
         return out
 
-    @app.post("/api/projects/{project}/runs", status_code=202)
+    @app.post("/api/projects/{project}/runs", status_code=202, dependencies=[Depends(require_token)])
     def trigger(project: str, body: TriggerBody) -> dict[str, str]:
         return {"run_id": server.start_run(project, "manual", body.builds, body.branch, body.commit, body.params)}
 
-    @app.get("/api/runs")
+    @app.get("/api/runs", dependencies=[Depends(require_read)])
     def runs(project: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
         return server.engine.store.runs(project, min(limit, 500))
 
-    @app.get("/api/runs/{run_id}")
+    @app.get("/api/runs/{run_id}", dependencies=[Depends(require_read)])
     def run(run_id: str) -> dict[str, Any]:
         return run_or_404(run_id)
 
-    @app.post("/api/runs/{run_id}/cancel")
+    @app.post("/api/runs/{run_id}/cancel", dependencies=[Depends(require_token)])
     def cancel(run_id: str) -> dict[str, bool]:
         run_or_404(run_id)
         return {"canceled": server.engine.cancel(run_id)}
 
-    @app.get("/api/runs/{run_id}/builds/{build_id}/steps/{idx}/log", response_class=PlainTextResponse)
+    @app.get(
+        "/api/runs/{run_id}/builds/{build_id}/steps/{idx}/log",
+        response_class=PlainTextResponse,
+        dependencies=[Depends(require_read)],
+    )
     def log(run_id: str, build_id: str, idx: int) -> str:
         s = server.engine.store.step(run_id, build_id, idx)
         if s is None or not s["log_path"]:
@@ -187,7 +219,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         p = Path(s["log_path"])
         return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
 
-    @app.get("/api/runs/{run_id}/builds/{build_id}/artifacts/{path:path}")
+    @app.get("/api/runs/{run_id}/builds/{build_id}/artifacts/{path:path}", dependencies=[Depends(require_read)])
     def artifact(run_id: str, build_id: str, path: str) -> FileResponse:
         run_or_404(run_id)
         root = server.settings.data_dir / "artifacts" / run_id / build_id
@@ -225,13 +257,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ]
         return JSONResponse({"runs": started}, status_code=202)
 
-    @app.get("/", response_class=HTMLResponse)
+    @app.get("/", response_class=HTMLResponse, dependencies=[Depends(require_read)])
     def index(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(
             request, "index.html", {"projects": projects(), "runs": server.engine.store.runs(limit=30)}
         )
 
-    @app.get("/runs/{run_id}", response_class=HTMLResponse)
+    @app.get("/runs/{run_id}", response_class=HTMLResponse, dependencies=[Depends(require_read)])
     def run_page(request: Request, run_id: str) -> HTMLResponse:
         r = run_or_404(run_id)
         return templates.TemplateResponse(request, "run.html", {"run": r, "duration": _duration})
@@ -254,4 +286,4 @@ def serve(host: str, port: int, settings: Settings) -> None:
     uvicorn.run(create_app(settings), host=host, port=port, log_level="info")
 
 
-__all__ = ["Settings", "create_app", "serve", "time"]
+__all__ = ["Settings", "create_app", "serve", "time", "token_ok"]

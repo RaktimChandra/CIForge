@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] — 2026-10-16
+- API authentication: starting and cancelling runs needs a bearer token from
+  `CIFORGE_API_TOKENS` (constant-time comparison); without tokens those endpoints are disabled
+  (503), the same secure default as webhooks without a secret. Optional
+  `CIFORGE_READ_REQUIRES_TOKEN=true` protects reads and the web UI too.
+
 ## [1.0.1] — 2026-10-16
 - Documented a real pipeline run: TestHarness's nine-build chain on CIForge (RESULTS.md).
 

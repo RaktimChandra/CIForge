@@ -1,4 +1,4 @@
-# CIForge with the example project. Webhooks need CIFORGE_WEBHOOK_SECRET.
+# CIForge with the example project. Webhooks need CIFORGE_WEBHOOK_SECRET; API run triggers need CIFORGE_API_TOKENS.
 services:
   ciforge:
     build: .
@@ -6,6 +6,7 @@ services:
     environment:
       CIFORGE_PROJECTS: hello=/pipelines/hello.yml
       CIFORGE_WEBHOOK_SECRET: ${CIFORGE_WEBHOOK_SECRET:-}
+      CIFORGE_API_TOKENS: ${CIFORGE_API_TOKENS:-}
     volumes:
       - ./examples/hello/.ciforge.yml:/pipelines/hello.yml:ro
       - ciforge-data:/data
