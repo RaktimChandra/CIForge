@@ -27,6 +27,10 @@ flowchart LR
   engine --> art["artifact store<br/>glob => target rules"]
 ```
 
+It runs a real pipeline: [TestHarness](https://github.com/RaktimChandra/TestHarness)'s
+`.ciforge.yml` — nine builds, 158 suite tests, mutation testing and a Gatling smoke behind one
+quality gate — completed in 8 min 11 s on a 2-vCPU machine ([RESULTS.md](RESULTS.md)).
+
 ## A pipeline
 
 ```yaml

@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.0.1] — 2026-10-16
+- Documented a real pipeline run: TestHarness's nine-build chain on CIForge (RESULTS.md).
+
 ## [1.0.0] — 2026-10-15
 - Pipeline file with build configurations, snapshot and artifact dependencies, parameters,
   secrets, VCS and schedule triggers; validated at load time.

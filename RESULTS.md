@@ -22,3 +22,22 @@ CI uses `alpine:3.20`).
 |---|---|---|
 | `test_docker_runner_executes_inside_the_image_with_the_workspace_mounted` | `%param%` references in a Docker runner's image were not substituted (`docker: invalid reference format`) | the engine substitutes the image and options per build |
 | CI on Python 3.12 (5 failures; 3.13 green) | `out/** => bin` published nothing on 3.12: its `Path.glob` matches only directories for a trailing `**` | trailing `**` normalised to `**/*`; regression test |
+
+## A real pipeline: TestHarness — run `20261016-053049-a47fe6`, 2026-10-16
+
+**What:** [TestHarness](https://github.com/RaktimChandra/TestHarness)'s own `.ciforge.yml`
+(9 builds: build → API, BDD, two UI shards, PIT, Gatling, quarantined tests → quality gate),
+run with this repository at `2ef5457` on the 2-vCPU sandbox:
+`ciforge run .ciforge.yml --source <TestHarness> --branch phase5 -p mvn="mvn -o -B" -p suite.args=...`.
+
+| | |
+|---|---|
+| Result | **success**, all 9 builds |
+| Wall-clock | **8 min 11 s** (05:30:49 → 05:39:00 UTC), `max_parallel: 2` |
+| Snapshot dependency | every build checked out the same commit (`cff831e`) from the run's mirror |
+| Artifact dependency | the quality gate fetched 48 report files from 4 upstream builds and counted 158 tests, 0 failed |
+| Parallelism | `api` and `bdd` started together at 05:33:37; never more than 2 builds at once |
+
+Per-build timings and log extracts are committed in TestHarness:
+`experiments/ciforge/run-20261016-053049-a47fe6.json`.
+
