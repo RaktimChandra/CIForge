@@ -16,6 +16,14 @@ CI uses `alpine:3.20`).
 | `ruff check`, `ruff format --check` | clean |
 | `mypy --strict` | no issues in 15 source files |
 
+## Test suite — authoring sandbox, 2026-10-20 (1.1.0)
+
+Same method as below (`CIFORGE_TEST_IMAGE=postgres:16-alpine`, because Docker Hub is blocked in
+the sandbox; CI uses `alpine:3.20`): **38 passed, 0 failed, 0 skipped**, the Docker-runner test
+included, on Python 3.13.16; line coverage **92 %** (1,001 statements, 80 missed); `ruff check`
+and `ruff format --check` clean. The four tests added since 1.0.0 cover API tokens. CI on `main`
+runs the same suite on Python 3.12 and 3.13 plus the image smoke test (run for `b571d73`: green).
+
 ## Defects found by the tests while building
 
 | Found by | Defect | Fix |
