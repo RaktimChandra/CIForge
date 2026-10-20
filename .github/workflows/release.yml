@@ -1,0 +1,61 @@
+# Publishes a GitHub release from main: tag v<version>, notes from CHANGELOG.md, and the wheel
+# and source distribution built from that commit after the test suite passes on it.
+#
+# Actions -> release -> Run workflow, version e.g. 1.1.0 (must match pyproject.toml and have a
+# "## [version]" section in CHANGELOG.md).
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without the leading v
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Only from main, only once, only with matching version and notes
+        run: |
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error::release from main only (got $GITHUB_REF)"; exit 1; }
+          ! git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null || { echo "::error::tag v$VERSION exists"; exit 1; }
+          python3 - <<'PY'
+          import os, re, sys, tomllib
+          v = os.environ["VERSION"]
+          declared = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]
+          if declared != v:
+              sys.exit(f"::error::pyproject.toml says {declared}, not {v}")
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(r"^## \[" + re.escape(v) + r"\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+          if not m:
+              sys.exit(f"::error::no '## [{v}]' section in CHANGELOG.md")
+          open("release-notes.md", "w", encoding="utf-8").write(m.group(1).strip() + "\n")
+          PY
+      - name: Test, then build the wheel and sdist
+        run: |
+          pip install --quiet -e ".[dev]" build
+          pytest -q
+          python -m build --outdir dist
+          ls -l dist
+      - name: Tag and publish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "CIForge $VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" dist/* --title "CIForge $VERSION" --notes-file release-notes.md --verify-tag
+          echo "Released v$VERSION: $(gh release view "v$VERSION" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
