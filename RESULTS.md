@@ -41,3 +41,17 @@ run with this repository at `2ef5457` on the 2-vCPU sandbox:
 Per-build timings and log extracts are committed in TestHarness:
 `experiments/ciforge/run-20261016-053049-a47fe6.json`.
 
+
+## The same pipeline inside GitHub Actions — TestHarness `ciforge.yml`, 2026-10-20
+
+TestHarness's `ciforge.yml` installs CIForge from this repository's `main` on a GitHub runner
+(4 vCPU) and runs `.ciforge.yml` on the pushed commit, with the quality gate in the **Docker
+runner** (`python:3.12-slim`).
+
+| Actions run | CIForge run | Result | Wall-clock |
+|---|---|---|---|
+| 39410844981 | `20261020-105132-7c7e70` | **failure**: both UI shards failed for want of `chrome-linux` visual baselines; the gate was cancelled because its dependencies failed — the expected behaviour | — |
+| 39419521879 | `20261020-120450-36aafa` | **success**, 9 of 9 builds, gate green in its container | **5 min 25 s** |
+
+The fix was a TestHarness parameter (`-p suite.args=-Dharness.visual.platform=chrome-ci`), not
+a CIForge change. Both run records are committed in TestHarness under `experiments/ciforge/`.
